@@ -1,5 +1,6 @@
 package com.nispok.samples.snackbar;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -7,6 +8,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -73,6 +75,7 @@ public class SnackbarSampleActivity extends ActionBarActivity {
                 SnackbarManager.show(
                         Snackbar.with(SnackbarSampleActivity.this)
                                 .type(SnackbarType.MULTI_LINE)
+                                .swapVertical()
                                 .text("This is a multi-line snackbar. Keep in mind that snackbars" +
                                         " are meant for VERY short messages"));
             }
@@ -311,6 +314,7 @@ public class SnackbarSampleActivity extends ActionBarActivity {
 		    public void onClick(View v) {
 			    SnackbarManager.show(
 					    Snackbar.with(SnackbarSampleActivity.this).position(Snackbar.SnackbarPosition.TOP)
+                                .swapVertical()
 					            .text("Single-line Top"));
 		    }
 	    });
@@ -327,6 +331,7 @@ public class SnackbarSampleActivity extends ActionBarActivity {
 
 		    }
 	    });
+
 
 	    Button singleLineTopButtonInside = (Button) findViewById(R.id.single_line_top_inside);
 	    singleLineTopButtonInside.setOnClickListener(new View.OnClickListener() {
@@ -351,6 +356,31 @@ public class SnackbarSampleActivity extends ActionBarActivity {
 					            .margin(15, 15)
 					            .backgroundDrawable(R.drawable.custom_shape)
 					            .text("Single-line Custom Shape"));
+            }
+        });
+
+        Button customViewButton = (Button) findViewById(R.id.custom_view);
+        customViewButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                LayoutInflater inflater = (LayoutInflater) SnackbarSampleActivity.this.getSystemService(
+                        Context.LAYOUT_INFLATER_SERVICE);
+                final View contentView = inflater.inflate(R.layout.view_custom_notification, null);
+                final Snackbar snackbar = Snackbar.with(SnackbarSampleActivity.this)
+                        .customView(contentView)
+                        .swapVertical()
+                        .duration(Snackbar.SnackbarDuration.LENGTH_SUPER_LONG)
+                        .position(Snackbar.SnackbarPosition.TOP)
+                        .spaceColor(Color.parseColor("#E7000000"));
+                snackbar.customViewListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        Toast.makeText(SnackbarSampleActivity.this, "View is Clicked ",
+                                Toast.LENGTH_SHORT).show();
+                        snackbar.dismiss();
+                    }
+                });
+                SnackbarManager.show(snackbar);
             }
         });
     }

@@ -122,6 +122,12 @@
 		    android:layout_height="wrap_content"
 		    android:text="Custom Shape Touchable" />
 
+		<Button
+			android:id="@+id/custom_view"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:text="Show a Custom View" />
+
 	    <Button
 		    android:id="@+id/single_line_inside"
 		    android:layout_width="match_parent"

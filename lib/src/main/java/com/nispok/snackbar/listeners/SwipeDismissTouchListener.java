@@ -18,6 +18,7 @@ package com.nispok.snackbar.listeners;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -51,6 +52,7 @@ public class SwipeDismissTouchListener implements View.OnTouchListener {
     private Object mToken;
     private VelocityTracker mVelocityTracker;
     private float mTranslationX;
+    private View.OnClickListener mOnClickListener;
 
     /**
      * The callback interface used by {@link SwipeDismissTouchListener} to inform its client
@@ -87,6 +89,28 @@ public class SwipeDismissTouchListener implements View.OnTouchListener {
      * @param callbacks The callback to trigger when the user has indicated that she would like to
      *                 dismiss this view.
      */
+    public SwipeDismissTouchListener(View view, Object token, View.OnClickListener onClickListener,
+                                     DismissCallbacks callbacks) {
+        ViewConfiguration vc = ViewConfiguration.get(view.getContext());
+        mSlop = vc.getScaledTouchSlop();
+        mMinFlingVelocity = vc.getScaledMinimumFlingVelocity() * 16;
+        mMaxFlingVelocity = vc.getScaledMaximumFlingVelocity();
+        mAnimationTime = view.getContext().getResources().getInteger(
+                android.R.integer.config_shortAnimTime);
+        mContainerView = view;
+        mToken = token;
+        mCallbacks = callbacks;
+        mOnClickListener = onClickListener;
+    }
+
+    /**
+     * Constructs a new swipe-to-dismiss touch listener for the given view.
+     *
+     * @param view     The view to make dismissable.
+     * @param token    An optional token/cookie object to be passed through to the callback.
+     * @param callbacks The callback to trigger when the user has indicated that she would like to
+     *                 dismiss this view.
+     */
     public SwipeDismissTouchListener(View view, Object token, DismissCallbacks callbacks) {
         ViewConfiguration vc = ViewConfiguration.get(view.getContext());
         mSlop = vc.getScaledTouchSlop();
@@ -103,13 +127,14 @@ public class SwipeDismissTouchListener implements View.OnTouchListener {
     public boolean onTouch(final View view, MotionEvent motionEvent) {
         // offset because the view is translated during swipe
         motionEvent.offsetLocation(mTranslationX, 0);
-
+        Log.d("wcy", "onTouch");
         if (mViewWidth < 2) {
             mViewWidth = view.getWidth();
         }
 
         switch (motionEvent.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
+                Log.d("wcy", "ACTION_DOWN = " );
                 // TODO: ensure this is a finger, and set a flag
                 mDownX = motionEvent.getRawX();
                 mDownY = motionEvent.getRawY();
@@ -171,6 +196,10 @@ public class SwipeDismissTouchListener implements View.OnTouchListener {
                     mContainerView.animate()
                             .alpha(1)
                             .setDuration(mAnimationTime);
+                }else {
+                    if(mOnClickListener != null){
+                        mOnClickListener.onClick(view);
+                    }
                 }
                 if (mVelocityTracker != null) {
                     mVelocityTracker.recycle();
@@ -213,6 +242,7 @@ public class SwipeDismissTouchListener implements View.OnTouchListener {
                 mVelocityTracker.addMovement(motionEvent);
                 float deltaX = motionEvent.getRawX() - mDownX;
                 float deltaY = motionEvent.getRawY() - mDownY;
+                Log.d("wcy", "ACTION_MOVE = " + deltaY);
                 if (Math.abs(deltaX) > mSlop && Math.abs(deltaY) < Math.abs(deltaX) / 2) {
                     mSwiping = true;
                     mSwipingSlop = (deltaX > 0 ? mSlop : -mSlop);

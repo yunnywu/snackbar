@@ -38,6 +38,9 @@ import com.nispok.snackbar.listeners.ActionClickListener;
 import com.nispok.snackbar.listeners.ActionSwipeListener;
 import com.nispok.snackbar.listeners.EventListener;
 import com.nispok.snackbar.listeners.SwipeDismissTouchListener;
+import com.nispok.snackbar.listeners.VSwipeDismissTouchListener;
+import com.nispok.snackbar.util.StatusBarUtil;
+
 
 /**
  * View that provides quick feedback about an operation in a small popup at the base of the screen
@@ -45,7 +48,7 @@ import com.nispok.snackbar.listeners.SwipeDismissTouchListener;
 public class Snackbar extends SnackbarLayout {
 
     public enum SnackbarDuration {
-        LENGTH_SHORT(2000), LENGTH_LONG(3500), LENGTH_INDEFINITE(-1);
+        LENGTH_SHORT(1500), LENGTH_LONG(3000), LENGTH_SUPER_LONG(8000), LENGTH_INDEFINITE(-1);
 
         private long duration;
 
@@ -82,6 +85,7 @@ public class Snackbar extends SnackbarLayout {
     private TextView snackbarAction;
     private int mColor = mUndefinedColor;
     private int mTextColor = mUndefinedColor;
+    private int mSpaceColor = mUndefinedColor;
     private int mOffset;
     private Integer mLineColor;
     private SnackbarPosition mPhonePosition = SnackbarPosition.BOTTOM;
@@ -112,6 +116,7 @@ public class Snackbar extends SnackbarLayout {
     private boolean mIsShowing = false;
     private boolean mCanSwipeToDismiss = true;
     private boolean mIsDismissing = false;
+    private boolean mIsSwapVertical = false;
     private Rect mWindowInsets = new Rect();
     private Rect mDisplayFrame = new Rect();
     private Point mDisplaySize = new Point();
@@ -119,6 +124,8 @@ public class Snackbar extends SnackbarLayout {
     private Activity mTargetActivity;
     private Float mMaxWidthPercentage = null;
     private boolean mUsePhoneLayout;
+    private View mCustomView;
+    private View.OnClickListener mCustomViewClickListener;
     private Runnable mDismissRunnable = new Runnable() {
         @Override
         public void run() {
@@ -296,7 +303,7 @@ public class Snackbar extends SnackbarLayout {
      * Set the position for wide screen (tablets | desktop) of the {@link Snackbar}. Note that if this is not set, the default is to
      * show the snackbar to the bottom | center of the screen.
      *
-     * @param position A {@link com.nispok.snackbar.Snackbar.SnackbarPosition}
+     * @param position A
      * @return A {@link Snackbar} instance to make changing
      */
     public Snackbar widePosition(SnackbarPosition position){
@@ -461,7 +468,8 @@ public class Snackbar extends SnackbarLayout {
     }
 
     /**
-     * Determines whether this {@link com.nispok.snackbar.Snackbar} can be swiped off from the screen
+     * Determines whether this {@link Snackbar}
+     * can be swiped off from the screen
      *
      * @param canSwipeToDismiss
      * @return
@@ -559,7 +567,54 @@ public class Snackbar extends SnackbarLayout {
         return this;
     }
 
-    private static MarginLayoutParams createMarginLayoutParams(ViewGroup viewGroup, int width, int height, SnackbarPosition position) {
+    /**
+     * Use a custom view for this Snackbar's show content
+     *
+     * @param view the View to display
+     * @return
+     */
+    public Snackbar customView(View view) {
+        mCustomView = view;
+        return this;
+    }
+
+    public Snackbar customViewListener(View.OnClickListener listener){
+        mCustomViewClickListener =listener;
+        return this;
+    }
+
+    /**
+     * Use for custom view, Sets the background color of the title for the transparent status bar
+     *
+     * @param color
+     * @return
+     */
+    public Snackbar spaceColor(int color) {
+        mSpaceColor = color;
+        return this;
+    }
+
+    /**
+     * whether can swap from vertical direction
+     *
+     * @return
+     */
+    public Snackbar swapVertical(){
+        mIsSwapVertical = true;
+        return this;
+    }
+
+    /**
+     * Use for custom view, Sets the background color of the title for the transparent status bar
+     *
+     * @param resId
+     * @return
+     */
+    public Snackbar spaceColorResource(@ColorRes int resId) {
+        return color(getResources().getColor(resId));
+    }
+
+    private static ViewGroup.MarginLayoutParams createMarginLayoutParams(ViewGroup viewGroup, int width, int height, SnackbarPosition position) {
         if (viewGroup instanceof FrameLayout) {
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, height);
             params.gravity = position.getLayoutGravity();
@@ -574,7 +629,7 @@ public class Snackbar extends SnackbarLayout {
 
             return params;
         } else if (viewGroup instanceof LinearLayout) {
-            LinearLayout.LayoutParams params = new LayoutParams(width, height);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height);
             params.gravity = position.getLayoutGravity();
             return params;
         } else {
@@ -590,7 +645,69 @@ public class Snackbar extends SnackbarLayout {
         }
     }
 
-    private MarginLayoutParams init(Context context, Activity targetActivity, ViewGroup parent, boolean usePhoneLayout) {
+    private ViewGroup.MarginLayoutParams init(Context context, Activity targetActivity, ViewGroup parent, boolean usePhoneLayout) {
+        if(mCustomView != null){
+            return initWithCustomLayout(context, targetActivity, parent, usePhoneLayout);
+        }else {
+            return initWithTextLayout(context, targetActivity, parent, usePhoneLayout);
+        }
+    }
+
+    private ViewGroup.MarginLayoutParams initWithCustomLayout(Context context, Activity targetActivity, ViewGroup parent, boolean usePhoneLayout) {
+        SnackbarLayout layout = (SnackbarLayout) LayoutInflater.from(context)
+                .inflate(R.layout.sb__cust_view_template, this, true);
+        layout.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout contentLayout = (LinearLayout) layout.findViewById(R.id.sb__inner);
+        contentLayout.addView(mCustomView);
+
+        Resources res = getResources();
+        mOffset = res.getDimensionPixelOffset(R.dimen.sb__offset);
+        mUsePhoneLayout = usePhoneLayout;
+        float scale = res.getDisplayMetrics().density;
+        int statusBarHeight = StatusBarUtil.getStatusBarHeight(context);
+
+        View space = layout.findViewById(R.id.sb__space);
+        if(mPhonePosition == SnackbarPosition.TOP && StatusBarUtil.isStatusTransparent(context)) {
+            space.setVisibility(VISIBLE);
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) space.getLayoutParams();
+            lp.height = statusBarHeight;
+            if(mSpaceColor != mUndefinedColor){
+                space.setBackgroundColor(mSpaceColor);
+            }
+        }else {
+            space.setVisibility(GONE);
+        }
+
+        ViewGroup.MarginLayoutParams params;
+        if (mUsePhoneLayout) {
+            // Phone
+            params = createMarginLayoutParams(
+                    parent, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, mPhonePosition);
+        } else {
+            // Tablet/desktop
+            params = createMarginLayoutParams(
+                    parent, FrameLayout.LayoutParams.WRAP_CONTENT, dpToPx(mType.getMaxHeight(), scale), mWidePosition);
+
+        }
+
+        contentLayout.setClickable(true);
+        if (mCanSwipeToDismiss && res.getBoolean(R.bool.sb__is_swipeable)) {
+            if(mIsSwapVertical){
+                int position = mPhonePosition == SnackbarPosition.TOP ? VSwipeDismissTouchListener.POSITION_TOP
+                        : VSwipeDismissTouchListener.POSITION_DOWN;
+                contentLayout.setOnTouchListener(new VSwipeDismissTouchListener(this, position ,mCustomViewClickListener,
+                        mDismissCallback));
+            }else {
+                contentLayout.setOnTouchListener(new SwipeDismissTouchListener(this, null, mCustomViewClickListener,
+                        mDismissCallback));
+            }
+        }
+
+        return params;
+    }
+
+    private ViewGroup.MarginLayoutParams initWithTextLayout(Context context, Activity targetActivity, ViewGroup parent, boolean usePhoneLayout) {
         SnackbarLayout layout = (SnackbarLayout) LayoutInflater.from(context)
                 .inflate(R.layout.sb__template, this, true);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -600,14 +717,17 @@ public class Snackbar extends SnackbarLayout {
         mOffset = res.getDimensionPixelOffset(R.dimen.sb__offset);
         mUsePhoneLayout = usePhoneLayout;
         float scale = res.getDisplayMetrics().density;
-
+        int statusBarHeight = StatusBarUtil.getStatusBarHeight(context);
         View divider = layout.findViewById(R.id.sb__divider);
 
-        MarginLayoutParams params;
+        ViewGroup.MarginLayoutParams params;
         if (mUsePhoneLayout) {
             // Phone
             layout.setMinimumHeight(dpToPx(mType.getMinHeight(), scale));
-            layout.setMaxHeight(dpToPx(mType.getMaxHeight(), scale));
+//            layout.setMaxHeight(dpToPx(mType.getMaxHeight(), scale));
+            if(mPhonePosition == SnackbarPosition.TOP && StatusBarUtil.isStatusTransparent(context)) {
+                layout.setMaxHeight(dpToPx(mType.getMaxHeight(), scale) + statusBarHeight);
+            }
             layout.setBackgroundColor(mColor);
             params = createMarginLayoutParams(
                     parent, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, mPhonePosition);
@@ -630,7 +750,8 @@ public class Snackbar extends SnackbarLayout {
             bg.setColor(mColor);
 
             params = createMarginLayoutParams(
-                    parent, FrameLayout.LayoutParams.WRAP_CONTENT, dpToPx(mType.getMaxHeight(), scale), mWidePosition);
+                    parent, FrameLayout.LayoutParams.WRAP_CONTENT,
+                    dpToPx(mType.getMaxHeight(), scale), mWidePosition);
 
             if (mLineColor != null) {
                 divider.setBackgroundResource(R.drawable.sb__divider_bg);
@@ -653,8 +774,18 @@ public class Snackbar extends SnackbarLayout {
         }
 
         snackbarText.setMaxLines(mType.getMaxLines());
+        if(mPhonePosition == SnackbarPosition.TOP && StatusBarUtil.isStatusTransparent(context)) {
+            snackbarText.setPadding(snackbarText.getPaddingLeft(),
+                    snackbarText.getPaddingTop() + statusBarHeight, snackbarText.getPaddingRight(),
+                    snackbarText.getPaddingBottom());
+        }
 
         snackbarAction = (TextView) layout.findViewById(R.id.sb__action);
+        if(mPhonePosition == SnackbarPosition.TOP && StatusBarUtil.isStatusTransparent(context)) {
+            snackbarAction.setPadding(snackbarAction.getPaddingLeft(),
+                    snackbarAction.getPaddingTop() + statusBarHeight, snackbarAction.getPaddingRight(),
+                    snackbarAction.getPaddingBottom());
+        }
         if (!TextUtils.isEmpty(mActionLabel)) {
             requestLayout();
             snackbarAction.setText(mActionLabel);
@@ -664,7 +795,7 @@ public class Snackbar extends SnackbarLayout {
                 snackbarAction.setTextColor(mActionColor);
             }
 
-            snackbarAction.setOnClickListener(new OnClickListener() {
+            snackbarAction.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
                     if (mActionClickListener != null) {
@@ -692,39 +823,16 @@ public class Snackbar extends SnackbarLayout {
         inner.setClickable(true);
 
         if (mCanSwipeToDismiss && res.getBoolean(R.bool.sb__is_swipeable)) {
-            inner.setOnTouchListener(new SwipeDismissTouchListener(this, null,
-                    new SwipeDismissTouchListener.DismissCallbacks() {
-                        @Override
-                        public boolean canDismiss(Object token) {
-                            return true;
-                        }
+            if(mIsSwapVertical){
+                int position = mPhonePosition == SnackbarPosition.TOP ? VSwipeDismissTouchListener.POSITION_TOP
+                        : VSwipeDismissTouchListener.POSITION_DOWN;
+                inner.setOnTouchListener(new VSwipeDismissTouchListener(this, position, mCustomViewClickListener,
+                        mDismissCallback));
+            }else {
+                inner.setOnTouchListener(new SwipeDismissTouchListener(this, null, mDismissCallback));
+            }
 
-                        @Override
-                        public void onDismiss(View view, Object token) {
-                            if (view != null) {
-                                if (mActionSwipeListener != null) {
-                                    mActionSwipeListener.onSwipeToDismiss();
-                                }
-                                dismiss(false);
-                            }
-                        }
 
-                        @Override
-                        public void pauseTimer(boolean shouldPause) {
-                            if (isIndefiniteDuration()) {
-                                return;
-                            }
-                            if (shouldPause) {
-                                removeCallbacks(mDismissRunnable);
-
-                                mSnackbarFinish = System.currentTimeMillis();
-                            } else {
-                                mTimeRemaining -= (mSnackbarFinish - mSnackbarStart);
-
-                                startTimer(mTimeRemaining);
-                            }
-                        }
-                    }));
         }
 
         return params;
@@ -792,21 +900,21 @@ public class Snackbar extends SnackbarLayout {
 
     /**
      * Displays the {@link Snackbar} at the bottom of the
-     * {@link android.app.Activity} provided.
+     * {@link Activity} provided.
      *
      * @param targetActivity
      */
     public void show(Activity targetActivity) {
         ViewGroup root = (ViewGroup) targetActivity.findViewById(android.R.id.content);
         boolean usePhoneLayout = shouldUsePhoneLayout(targetActivity);
-        MarginLayoutParams params = init(targetActivity, targetActivity, root, usePhoneLayout);
+        ViewGroup.MarginLayoutParams params = init(targetActivity, targetActivity, root, usePhoneLayout);
         updateLayoutParamsMargins(targetActivity, params);
         showInternal(targetActivity, params, root);
     }
 
     /**
      * Displays the {@link Snackbar} at the bottom of the
-     * {@link android.view.ViewGroup} provided.
+     * {@link ViewGroup} provided.
      *
      * @param parent
      */
@@ -816,13 +924,13 @@ public class Snackbar extends SnackbarLayout {
 
     /**
      * Displays the {@link Snackbar} at the bottom of the
-     * {@link android.view.ViewGroup} provided.
+     * {@link ViewGroup} provided.
      *
      * @param parent
      * @param usePhoneLayout
      */
     public void show(ViewGroup parent, boolean usePhoneLayout) {
-        MarginLayoutParams params = init(parent.getContext(), null, parent, usePhoneLayout);
+        ViewGroup.MarginLayoutParams params = init(parent.getContext(), null, parent, usePhoneLayout);
         updateLayoutParamsMargins(null, params);
         showInternal(null, params, parent);
     }
@@ -832,7 +940,7 @@ public class Snackbar extends SnackbarLayout {
         return this;
     }
 
-    private void showInternal(Activity targetActivity, MarginLayoutParams params, ViewGroup parent) {
+    private void showInternal(Activity targetActivity, ViewGroup.MarginLayoutParams params, ViewGroup parent) {
         parent.removeView(this);
 
         // We need to make sure the Snackbar elevation is at least as high as
@@ -898,7 +1006,9 @@ public class Snackbar extends SnackbarLayout {
                     mIsShowingByReplace = false; // reset flag
                 }
 
-                focusForAccessibility(snackbarText);
+                if(snackbarText != null) {
+                    focusForAccessibility(snackbarText);
+                }
 
                 post(new Runnable() {
                     @Override
@@ -1041,7 +1151,7 @@ public class Snackbar extends SnackbarLayout {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        
+
         mIsShowing = false;
 
         if (mDismissRunnable != null) {
@@ -1072,14 +1182,14 @@ public class Snackbar extends SnackbarLayout {
             return;
         }
 
-        MarginLayoutParams params = (MarginLayoutParams) getLayoutParams();
+        ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) getLayoutParams();
 
         updateLayoutParamsMargins(mTargetActivity, params);
 
         setLayoutParams(params);
     }
 
-    protected void updateLayoutParamsMargins(Activity targetActivity, MarginLayoutParams params) {
+    protected void updateLayoutParamsMargins(Activity targetActivity, ViewGroup.MarginLayoutParams params) {
         if (mUsePhoneLayout) {
             // Phone
             params.topMargin = mMarginTop;
@@ -1136,18 +1246,18 @@ public class Snackbar extends SnackbarLayout {
 
     /**
      * @return whether the action button has been clicked. In other words, this method will let
-     * you know if {@link com.nispok.snackbar.listeners.ActionClickListener#onActionClicked(Snackbar)}
+     * you know if
      * was called. This is useful, for instance, if you want to know during
-     * {@link com.nispok.snackbar.listeners.EventListener#onDismiss(Snackbar)} if the
-     * {@link com.nispok.snackbar.Snackbar} is being dismissed because of its action click
+     *  if the
+     * Snackbar is being dismissed because of its action click
      */
     public boolean isActionClicked() {
         return mActionClicked;
     }
 
     /**
-     * @return the pixel offset of this {@link com.nispok.snackbar.Snackbar} from the left and
-     * bottom of the {@link android.app.Activity}.
+     * @return the pixel offset of this Snackbar from the left and
+     * bottom of the {@link Activity}.
      */
     public int getOffset() {
         return mOffset;
@@ -1173,21 +1283,21 @@ public class Snackbar extends SnackbarLayout {
     }
 
     /**
-     * @return true if this {@link com.nispok.snackbar.Snackbar} is currently showing
+     * @return true if this SnackBar is currently showing
      */
     public boolean isShowing() {
         return mIsShowing;
     }
 
     /**
-     * @return true if this {@link com.nispok.snackbar.Snackbar} is dismissing.
+     * @return true if this SnackBar is dismissing.
      */
     public boolean isDimissing() {
         return mIsDismissing;
     }
 
     /**
-     * @return false if this {@link com.nispok.snackbar.Snackbar} has been dismissed
+     * @return false if this SnackBar has been dismissed
      */
     public boolean isDismissed() {
         return !mIsShowing;
@@ -1195,7 +1305,7 @@ public class Snackbar extends SnackbarLayout {
 
     /**
      * @param snackbarPosition
-     * @return the animation resource used by this {@link com.nispok.snackbar.Snackbar} instance
+     * @return the animation resource used by this SnackBar instance
      * to enter the view
      */
     @AnimRes
@@ -1205,7 +1315,7 @@ public class Snackbar extends SnackbarLayout {
 
     /**
      * @param snackbarPosition
-     * @return the animation resource used by this {@link com.nispok.snackbar.Snackbar} instance
+     * @return the animation resource used by this SnackBar instance
      * to exit the view
      */
     @AnimRes
@@ -1220,10 +1330,48 @@ public class Snackbar extends SnackbarLayout {
      * @param drawable
      */
     public static void setBackgroundDrawable(View view, Drawable drawable) {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.JELLY_BEAN) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN) {
             view.setBackgroundDrawable(drawable);
         } else {
             view.setBackground(drawable);
         }
     }
+
+    private SwipeDismissTouchListener.DismissCallbacks mDismissCallback = new SwipeDismissTouchListener.DismissCallbacks() {
+        @Override
+        public boolean canDismiss(Object token) {
+            return true;
+        }
+
+        @Override
+        public void onDismiss(View view, Object token) {
+            if (view != null) {
+                if (mActionSwipeListener != null) {
+                    mActionSwipeListener.onSwipeToDismiss();
+                }
+                if(mIsSwapVertical){
+                    dismiss();
+                }else {
+                    dismiss(false);
+                }
+            }
+        }
+
+        @Override
+        public void pauseTimer(boolean shouldPause) {
+            if (isIndefiniteDuration()) {
+                return;
+            }
+            if (shouldPause) {
+                removeCallbacks(mDismissRunnable);
+
+                mSnackbarFinish = System.currentTimeMillis();
+            } else {
+                mTimeRemaining -= (mSnackbarFinish - mSnackbarStart);
+
+                startTimer(mTimeRemaining);
+            }
+        }
+    };
+
 }
